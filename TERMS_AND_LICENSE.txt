@@ -1,0 +1,67 @@
+===============================================================================
+NILLYGRAPHICS SUITE & NILLYHUB — ΟΡΟΙ ΧΡΗΣΗΣ, ΑΔΕΙΑ MIT & ΑΠΟΡΡΗΤΟ (EL / EN)
+created by Nilly graphics (Sotiris Christos) — https://nillygraphics.com/
+===============================================================================
+
+[ΕΛΛΗΝΙΚΑ]
+1. Δωρεάν Άδεια Χρήσης (MIT — 0 €):
+   Το λογισμικό της NillyGraphics Suite και το NillyHub διατίθενται 100% δωρεάν
+   (0 €) υπό την Άδεια Ανοιχτού Κώδικα MIT για προσωπική και εμπορική χρήση, με
+   την υποχρέωση διατήρησης της σημείωσης πνευματικών δικαιωμάτων
+   (Copyright Nilly graphics — Sotiris Christos).
+   Τα σήματα και λογότυπα «Nilly Graphics» / «Nillygraphics» ανήκουν στον δημιουργό.
+
+2. Απόρρητο & 0 Τηλεμετρία:
+   Όλα τα εργαλεία εκτελούνται 100% τοπικά στον υπολογιστή σας με 0 MB RAM όταν
+   είναι κλειστά και ΔΕΝ συλλέγουν ούτε στέλνουν προσωπικά δεδομένα, αρχεία,
+   κωδικούς Wi-Fi ή δεδομένα της κλειδοθήκης (NillyClip Pro Vault) πουθενά.
+   Μόνο το NillyHub πραγματοποιεί απλό έλεγχο ενημερώσεων στο github.com/nillynp
+   με επαλήθευση ακεραιότητας SHA-256.
+
+3. Υπεύθυνη Χρήση & Αντίγραφα Ασφαλείας (Backup):
+   - Διατηρείτε πάντα αντίγραφα ασφαλείας σημαντικών αρχείων πριν από μαζικές
+     επεξεργασίες, διαγραφές, καθαρισμούς ή απεγκαταστάσεις.
+   - NillyClip Pro Vault: αποθηκεύεται 100% τοπικά (AES-256 + Windows DPAPI).
+     Η Nilly Graphics δεν έχει πρόσβαση και δεν μπορεί να ανακτήσει χαμένο
+     κύριο κωδικό (master password).
+   - NillyNet Pro: προορίζεται αποκλειστικά για νόμιμη χρήση στις δικές σας
+     συσκευές και εξουσιοδοτημένα δίκτυα.
+
+4. Παροχή «ΩΣ ΕΧΕΙ» (AS IS):
+   Το δωρεάν λογισμικό παρέχεται «ΩΣ ΕΧΕΙ» (AS IS), χωρίς εγγύηση οιουδήποτε
+   είδους, στο μέγιστο βαθμό που επιτρέπει η ισχύουσα ελληνική & ευρωπαϊκή νομοθεσία.
+
+Πλήρεις Όροι Χρήσης & Πολιτική Απορρήτου:
+  https://nillygraphics.com/terms-and-conditions/el/#free-software
+  https://nillygraphics.com/privacy-policy/el/
+Επικοινωνία: info@nillygraphics.com | https://github.com/nillynp
+
+-------------------------------------------------------------------------------
+
+[ENGLISH]
+1. Free Open-Source License (MIT — €0):
+   NillyGraphics Suite & NillyHub are distributed 100% free (€0) under the MIT
+   License for personal and commercial use, provided the copyright notice
+   (Copyright Nilly graphics — Sotiris Christos) is retained.
+
+2. Privacy & Zero Telemetry:
+   All tools run 100% locally with 0 MB idle RAM and collect or transmit ZERO
+   personal data, files, Wi-Fi passwords, or NillyClip Pro Vault entries.
+   Only NillyHub optionally queries github.com/nillynp for SHA-256 verified updates.
+
+3. Backups & Responsible Use:
+   - Always maintain backups before bulk operations, deletions, cleanups, or
+     app removals.
+   - NillyClip Pro Vault is stored 100% locally (AES-256 + DPAPI); lost master
+     passwords cannot be recovered by Nilly Graphics.
+   - NillyNet Pro is intended strictly for lawful use on your own devices and
+     authorized networks.
+
+4. "AS IS" Warranty Disclaimer:
+   The free software is provided "AS IS", without warranty of any kind, to the
+   maximum extent permitted by applicable law.
+
+Full Terms & Privacy Policy:
+  https://nillygraphics.com/terms-and-conditions/en/#free-software
+  https://nillygraphics.com/privacy-policy/en/
+Contact: info@nillygraphics.com | https://github.com/nillynp

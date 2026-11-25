@@ -27,8 +27,8 @@ using System.Windows.Forms;
 [assembly: AssemblyProduct("NillyZip Pro")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 Nilly graphics (Sotiris Christos) — https://nillygraphics.com/")]
 [assembly: AssemblyTrademark("Nilly graphics / Nillygraphics — Sotiris Christos")]
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.0.2.0")]
+[assembly: AssemblyFileVersion("1.0.2.0")]
 
 namespace NillyZipPro
 {
@@ -881,6 +881,20 @@ namespace NillyZipPro
             _list.Columns.Add("Συμπιεσμένο", 104, HorizontalAlignment.Right);
             _list.Columns.Add("Κέρδος", 68, HorizontalAlignment.Right);
             _list.Columns.Add("Τροποποίηση", 156);
+            EventHandler fitZipCols = delegate
+            {
+                int cw = _list.ClientSize.Width;
+                if (cw <= 320 || _list.Columns.Count < 5) return;
+                int c1 = 92, c2 = 100, c3 = 66, c4 = 152;
+                int c0 = Math.Max(140, cw - c1 - c2 - c3 - c4 - 2);
+                _list.Columns[0].Width = c0;
+                _list.Columns[1].Width = c1;
+                _list.Columns[2].Width = c2;
+                _list.Columns[3].Width = c3;
+                _list.Columns[4].Width = c4;
+            };
+            _list.Resize += fitZipCols;
+            _list.HandleCreated += fitZipCols;
             _list.DoubleClick += delegate { OnListDoubleClick(); };
             _list.SelectedIndexChanged += delegate { UpdatePreviewAndButtons(); };
             _list.KeyDown += delegate(object s, KeyEventArgs e) { if (e.KeyCode == Keys.Enter) OnListDoubleClick(); };
