@@ -1,5 +1,5 @@
 // ============================================================================
-// NillyZip Pro v1.2 — Ultra-Light Native Archive Manager for Windows 10/11
+// NillyZip Pro v1.2.1 — Ultra-Light Native Archive Manager for Windows 10/11
 // created by Nilly graphics (Sotiris Christos) — https://nillygraphics.com/
 // Strictly C# 5 compatible (.NET Framework 4.x csc.exe — 0 external DLLs)
 // Native ZIP + Windows 11 libarchive (RAR, 7Z, TAR, GZ, XZ, BZ2, ZST, CAB)
@@ -28,8 +28,8 @@ using System.Windows.Forms;
 [assembly: AssemblyProduct("NillyZip Pro")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 Nilly graphics (Sotiris Christos) — https://nillygraphics.com/")]
 [assembly: AssemblyTrademark("Nilly graphics / Nillygraphics — Sotiris Christos")]
-[assembly: AssemblyVersion("1.2.0.0")]
-[assembly: AssemblyFileVersion("1.2.0.0")]
+[assembly: AssemblyVersion("1.2.1.0")]
+[assembly: AssemblyFileVersion("1.2.1.0")]
 
 namespace NillyZipPro
 {
@@ -705,6 +705,25 @@ namespace NillyZipPro
             return list;
         }
 
+        public static string FriendlyError(Exception ex)
+        {
+            if (ex == null) return "Άγνωστο σφάλμα.";
+            string raw = (ex.Message ?? "").Trim();
+            string low = raw.ToLowerInvariant();
+            if (low.Contains("encrypt") || low.Contains("password") || low.Contains("passphrase") ||
+                low.Contains("unsupported compression method") || low.Contains("decryption"))
+                return "Το αρχείο προστατεύεται με κωδικό πρόσβασης (κρυπτογραφημένο ZIP/RAR/7Z).\r\nΠρος το παρόν δεν υποστηρίζεται αποσυμπίεση αρχείων με κωδικό.";
+            if (ex is UnauthorizedAccessException || low.Contains("access to the path") || low.Contains("access is denied"))
+                return "Δεν υπάρχει δικαίωμα πρόσβασης σε αυτόν τον φάκελο ή αρχείο.\r\nΔιάλεξε άλλον φάκελο (π.χ. Επιφάνεια Εργασίας ή Έγγραφα).";
+            if (ex is PathTooLongException || low.Contains("path too long"))
+                return "Η διαδρομή του αρχείου είναι υπερβολικά μεγάλη για τα Windows.\r\nΔοκίμασε εξαγωγή σε πιο σύντομο φάκελο (π.χ. C:\\Temp).";
+            if (low.Contains("being used by another process") || low.Contains("sharing violation"))
+                return "Το αρχείο χρησιμοποιείται αυτή τη στιγμή από άλλο πρόγραμμα.\r\nΚλείσε το και δοκίμασε ξανά.";
+            if (low.Contains("end of central directory") || low.Contains("corrupt") || low.Contains("truncated") || low.Contains("unrecognized archive format"))
+                return "Το συμπιεσμένο αρχείο φαίνεται κατεστραμμένο, ημιτελές ή μη υποστηριζόμενης μορφής.";
+            return raw;
+        }
+
         private static int RunProcess(string exe, string args, string workDir, out string stdout, out string stderr)
         {
             ProcessStartInfo psi = new ProcessStartInfo(exe, args);
@@ -859,6 +878,9 @@ namespace NillyZipPro
         private string _currentArchive;
         private List<ArchiveEntryItem> _allEntries = new List<ArchiveEntryItem>();
         private string _currentFolder = ""; // normalized e.g. "docs/images"
+        private int _sortCol = 0;
+        private bool _sortAsc = true;
+        private static readonly string[] ColBaseTitles = new string[] { "Όνομα", "Μέγεθος", "Συμπιεσμένο", "Κέρδος", "Τροποποίηση" };
         private bool _busy = false;
         private bool _internalDrag = false;
         private readonly List<KeyValuePair<string, DateTime>> _dragTempDirs = new List<KeyValuePair<string, DateTime>>();
@@ -1091,6 +1113,14 @@ namespace NillyZipPro
             _list.Columns.Add("Συμπιεσμένο", 104, HorizontalAlignment.Right);
             _list.Columns.Add("Κέρδος", 68, HorizontalAlignment.Right);
             _list.Columns.Add("Τροποποίηση", 156);
+            UpdateSortHeaders();
+            _list.ColumnClick += delegate(object s, ColumnClickEventArgs e)
+            {
+                if (e.Column == _sortCol) _sortAsc = !_sortAsc;
+                else { _sortCol = e.Column; _sortAsc = (e.Column == 0); }
+                UpdateSortHeaders();
+                PopulateCurrentView();
+            };
             EventHandler fitZipCols = delegate
             {
                 int cw = _list.ClientSize.Width;
@@ -1122,10 +1152,11 @@ namespace NillyZipPro
             {
                 bool hasSel = _list.SelectedItems.Count > 0 && !_busy && !string.IsNullOrEmpty(_currentArchive);
                 if (!hasSel) { ce.Cancel = true; return; }
+                bool hasReal = GetSelectedRelPaths().Count > 0;
                 _miOpen.Enabled = _list.SelectedItems.Count == 1;
-                _miExtSel.Enabled = true;
-                _miCopyFiles.Enabled = true;
-                _miDelSel.Enabled = ArchiveEngine.IsNativeZip(_currentArchive);
+                _miExtSel.Enabled = hasReal;
+                _miCopyFiles.Enabled = hasReal;
+                _miDelSel.Enabled = hasReal && ArchiveEngine.IsNativeZip(_currentArchive);
             };
             _list.ContextMenuStrip = _ctxList;
             _split.Panel1.Controls.Add(_list);
@@ -1241,6 +1272,13 @@ namespace NillyZipPro
             }
         }
 
+        private void UpdateSortHeaders()
+        {
+            if (_list == null || _list.Columns.Count < ColBaseTitles.Length) return;
+            for (int i = 0; i < ColBaseTitles.Length; i++)
+                _list.Columns[i].Text = ColBaseTitles[i] + (i == _sortCol ? (_sortAsc ? " ▲" : " ▼") : "");
+        }
+
         private void UpdateActionButtons()
         {
             bool hasArch = !string.IsNullOrEmpty(_currentArchive) && File.Exists(_currentArchive);
@@ -1249,7 +1287,7 @@ namespace NillyZipPro
             _btnSmartExt.Enabled = hasArch && !_busy;
             _btnTest.Enabled = hasArch && !_busy;
             _btnAdd.Enabled = isZip && !_busy;
-            _btnDel.Enabled = isZip && !_busy && _list.SelectedItems.Count > 0;
+            _btnDel.Enabled = isZip && !_busy && GetSelectedRelPaths().Count > 0;
             _btnUp.Enabled = hasArch && !string.IsNullOrEmpty(_currentFolder);
             _emptyPanel.Visible = !hasArch;
         }
@@ -1292,7 +1330,7 @@ namespace NillyZipPro
                 List<ArchiveEntryItem> items = null;
                 string err = null;
                 try { items = ArchiveEngine.ListEntries(path); }
-                catch (Exception ex) { err = ex.Message; }
+                catch (Exception ex) { err = ArchiveEngine.FriendlyError(ex); }
                 try
                 {
                     BeginInvoke((Action)delegate
@@ -1387,9 +1425,45 @@ namespace NillyZipPro
                 }
             }
 
-            folderRows.Sort(delegate(ListViewItem a, ListViewItem b) { return string.Compare(a.Text, b.Text, StringComparison.OrdinalIgnoreCase); });
-            fileRows.Sort(delegate(ListViewItem a, ListViewItem b) { return string.Compare(a.Text, b.Text, StringComparison.OrdinalIgnoreCase); });
+            int dirSign = (_sortCol == 0 && !_sortAsc) ? -1 : 1;
+            folderRows.Sort(delegate(ListViewItem a, ListViewItem b)
+            {
+                return dirSign * string.Compare(a.Text, b.Text, StringComparison.OrdinalIgnoreCase);
+            });
+            int sign = _sortAsc ? 1 : -1;
+            fileRows.Sort(delegate(ListViewItem a, ListViewItem b)
+            {
+                ArchiveEntryItem ia = a.Tag as ArchiveEntryItem;
+                ArchiveEntryItem ib = b.Tag as ArchiveEntryItem;
+                int cmp = 0;
+                if (ia != null && ib != null)
+                {
+                    if (_sortCol == 1) cmp = ia.UncompressedSize.CompareTo(ib.UncompressedSize);
+                    else if (_sortCol == 2) cmp = ia.CompressedSize.CompareTo(ib.CompressedSize);
+                    else if (_sortCol == 3)
+                    {
+                        double ra = (ia.UncompressedSize > 0 && ia.CompressedSize >= 0) ? (1.0 - (double)ia.CompressedSize / ia.UncompressedSize) : -1.0;
+                        double rb = (ib.UncompressedSize > 0 && ib.CompressedSize >= 0) ? (1.0 - (double)ib.CompressedSize / ib.UncompressedSize) : -1.0;
+                        cmp = ra.CompareTo(rb);
+                    }
+                    else if (_sortCol == 4) cmp = ia.Modified.CompareTo(ib.Modified);
+                    else cmp = string.Compare(ia.Name, ib.Name, StringComparison.OrdinalIgnoreCase);
+                }
+                if (cmp == 0) cmp = string.Compare(a.Text, b.Text, StringComparison.OrdinalIgnoreCase);
+                return sign * cmp;
+            });
 
+            if (!searching && !string.IsNullOrEmpty(_currentFolder))
+            {
+                ListViewItem upRow = new ListViewItem("↩  ..");
+                upRow.SubItems.Add("Επάνω φάκελος");
+                upRow.SubItems.Add("");
+                upRow.SubItems.Add("");
+                upRow.SubItems.Add("");
+                upRow.Tag = "UP";
+                upRow.ForeColor = Color.FromArgb(102, 217, 239);
+                _list.Items.Add(upRow);
+            }
             for (int i = 0; i < folderRows.Count; i++) _list.Items.Add(folderRows[i]);
             for (int i = 0; i < fileRows.Count; i++) _list.Items.Add(fileRows[i]);
             _list.EndUpdate();
@@ -1430,6 +1504,11 @@ namespace NillyZipPro
             if (_list.SelectedItems.Count == 0) return;
             object tag = _list.SelectedItems[0].Tag;
             string dirTag = tag as string;
+            if (dirTag == "UP")
+            {
+                NavigateUp();
+                return;
+            }
             if (dirTag != null && dirTag.StartsWith("DIR:"))
             {
                 _currentFolder = dirTag.Substring(4);
@@ -1465,7 +1544,7 @@ namespace NillyZipPro
                 }
                 Process.Start(new ProcessStartInfo(outFile) { UseShellExecute = true });
             }
-            catch (Exception ex) { MessageBox.Show(this, ex.Message, "NillyZip Pro"); }
+            catch (Exception ex) { MessageBox.Show(this, ArchiveEngine.FriendlyError(ex), "NillyZip Pro", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
         }
 
         private string[] StageSelectedForExport(out string stageDir)
@@ -1485,7 +1564,7 @@ namespace NillyZipPro
             ListViewItem draggedItem = e.Item as ListViewItem;
             if (draggedItem != null && !draggedItem.Selected)
                 draggedItem.Selected = true;
-            if (_list.SelectedItems.Count == 0) return;
+            if (GetSelectedRelPaths().Count == 0) return;
 
             string prevStatus = _lblStatus.Text;
             string stageDir = null;
@@ -1533,7 +1612,7 @@ namespace NillyZipPro
                 _internalDrag = false;
                 if (!string.IsNullOrEmpty(stageDir)) try { if (Directory.Exists(stageDir)) Directory.Delete(stageDir, true); } catch { }
                 _lblStatus.Text = prevStatus;
-                MessageBox.Show(this, "Σφάλμα κατά το σύρσιμο αρχείων:\r\n" + ex.Message, "NillyZip Pro", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "Σφάλμα κατά το σύρσιμο αρχείων:\r\n" + ArchiveEngine.FriendlyError(ex), "NillyZip Pro", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
 
@@ -1560,7 +1639,7 @@ namespace NillyZipPro
             {
                 Cursor = Cursors.Default;
                 if (!string.IsNullOrEmpty(stageDir)) try { if (Directory.Exists(stageDir)) Directory.Delete(stageDir, true); } catch { }
-                MessageBox.Show(this, "Σφάλμα αντιγραφής:\r\n" + ex.Message, "NillyZip Pro", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, "Σφάλμα αντιγραφής:\r\n" + ArchiveEngine.FriendlyError(ex), "NillyZip Pro", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
 
@@ -1572,6 +1651,12 @@ namespace NillyZipPro
             _txtPreview.Visible = true;
 
             if (_list.SelectedItems.Count != 1) return;
+            if ((_list.SelectedItems[0].Tag as string) == "UP")
+            {
+                _lblPrevTitle.Text = "Επάνω φάκελος (..)";
+                _txtPreview.Text = "Διπλό κλικ ή Backspace για επιστροφή στον προηγούμενο φάκελο.";
+                return;
+            }
             ArchiveEntryItem it = _list.SelectedItems[0].Tag as ArchiveEntryItem;
             if (it == null || it.IsDir) { _lblPrevTitle.Text = "Φάκελος"; _txtPreview.Text = "Διπλό κλικ για άνοιγμα φακέλου."; return; }
 
@@ -1671,7 +1756,7 @@ namespace NillyZipPro
                         try { BeginInvoke((Action)delegate { _lblStatus.Text = string.Format("Αποσυμπίεση ({0}/{1}): {2}", cur, tot, Path.GetFileName(name)); }); } catch { }
                     });
                 }
-                catch (Exception ex) { err = ex.Message; }
+                catch (Exception ex) { err = ArchiveEngine.FriendlyError(ex); }
                 try
                 {
                     BeginInvoke((Action)delegate
@@ -1726,7 +1811,7 @@ namespace NillyZipPro
                             try { BeginInvoke((Action)delegate { _lblStatus.Text = string.Format("Συμπίεση ({0}/{1}): {2}", c, t, n); }); } catch { }
                         });
                     }
-                    catch (Exception ex) { err = ex.Message; }
+                    catch (Exception ex) { err = ArchiveEngine.FriendlyError(ex); }
                     try
                     {
                         BeginInvoke((Action)delegate
@@ -1757,7 +1842,7 @@ namespace NillyZipPro
                     OpenArchiveAsync(_currentArchive);
                     _lblStatus.Text = "✓ Προστέθηκαν " + n + " αρχεία.";
                 }
-                catch (Exception ex) { MessageBox.Show(this, ex.Message, "NillyZip Pro", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+                catch (Exception ex) { MessageBox.Show(this, ArchiveEngine.FriendlyError(ex), "NillyZip Pro", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
             }
         }
 
@@ -1774,7 +1859,7 @@ namespace NillyZipPro
                 OpenArchiveAsync(_currentArchive);
                 _lblStatus.Text = "Διαγράφηκαν " + n + " στοιχεία.";
             }
-            catch (Exception ex) { MessageBox.Show(this, ex.Message, "NillyZip Pro", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+            catch (Exception ex) { MessageBox.Show(this, ArchiveEngine.FriendlyError(ex), "NillyZip Pro", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
         }
 
         private void TestCurrentArchiveAsync()
@@ -1787,7 +1872,7 @@ namespace NillyZipPro
                 string hash = null, err = null;
                 int cnt = 0;
                 try { hash = ArchiveEngine.TestIntegrityAndSha256(arch, out cnt); }
-                catch (Exception ex) { err = ex.Message; }
+                catch (Exception ex) { err = ArchiveEngine.FriendlyError(ex); }
                 try
                 {
                     BeginInvoke((Action)delegate
@@ -1837,7 +1922,7 @@ namespace NillyZipPro
                 if (dr == DialogResult.Yes)
                 {
                     try { ArchiveEngine.AddFilesToZip(_currentArchive, files, _currentFolder, CompressionLevel.Optimal); OpenArchiveAsync(_currentArchive); }
-                    catch (Exception ex) { MessageBox.Show(this, ex.Message, "NillyZip Pro"); }
+                    catch (Exception ex) { MessageBox.Show(this, ArchiveEngine.FriendlyError(ex), "NillyZip Pro", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
                 }
                 else if (dr == DialogResult.No)
                 {
