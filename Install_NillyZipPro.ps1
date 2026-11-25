@@ -107,7 +107,7 @@ Set-ItemProperty -Path 'HKCU:\Software\RegisteredApplications' -Name 'NillyZipPr
 
 try {
     Add-Type -Namespace NillyZipShell -Name Notify -MemberDefinition '[System.Runtime.InteropServices.DllImport("shell32.dll")] public static extern void SHChangeNotify(int wEventId, int uFlags, System.IntPtr dwItem1, System.IntPtr dwItem2);' -ErrorAction SilentlyContinue
-    [NillyZipShell.Notify]::SHChangeNotify(0x08000000, 0x1000, [IntPtr]::Zero, [IntPtr]::Zero)
+    [NillyZipShell.Notify]::SHChangeNotify(0x08000000, 0x2000, [IntPtr]::Zero, [IntPtr]::Zero)
 } catch {}
 
 # 4. Create Desktop & Start Menu Shortcuts
