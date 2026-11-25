@@ -10,11 +10,11 @@ foreach ($k in @(
     'HKCU:\Software\Classes\NillyZipPro.Archive',
     'HKCU:\Software\Classes\Applications\NillyZipPro.exe',
     'HKCU:\Software\NillyGraphics\NillyZipPro',
-    'HKCU:\Software\Classes\*\shell\NillyZipCompress',
     'HKCU:\Software\Classes\Directory\shell\NillyZipCompress'
 )) {
     if (Test-Path $k) { Remove-Item -Path $k -Recurse -Force }
 }
+& reg.exe delete "HKCU\Software\Classes\*\shell\NillyZipCompress" /f 2>$null | Out-Null
 
 $exts = @('.zip', '.7z', '.rar', '.tar', '.gz', '.tgz', '.xz', '.txz', '.bz2', '.zst', '.cab')
 foreach ($e in $exts) {

@@ -94,13 +94,12 @@ foreach ($e in $exts) {
     Set-ItemProperty -Path "$exCtx\command" -Name '(Default)' -Value $extHereCmd
 }
 
-# Right-click "Συμπίεση σε .ZIP (NillyZip Pro)" on files & folders
+# Right-click "Συμπίεση σε .ZIP (NillyZip Pro)" on files & folders (use reg.exe so literal '*' never expands as wildcard!)
 foreach ($cls in @('*', 'Directory')) {
-    $cKey = "HKCU:\Software\Classes\$cls\shell\NillyZipCompress"
-    New-Item -Path "$cKey\command" -Force | Out-Null
-    Set-ItemProperty -Path $cKey -Name '(Default)' -Value 'Συμπίεση σε .ZIP (NillyZip Pro)'
-    Set-ItemProperty -Path $cKey -Name 'Icon' -Value $iconRef
-    Set-ItemProperty -Path "$cKey\command" -Name '(Default)' -Value $compCmd
+    $rKey = "HKCU\Software\Classes\$cls\shell\NillyZipCompress"
+    & reg.exe add $rKey /ve /d "Συμπίεση σε .ZIP (NillyZip Pro)" /f | Out-Null
+    & reg.exe add $rKey /v "Icon" /d "$iconRef" /f | Out-Null
+    & reg.exe add "$rKey\command" /ve /d "$compCmd" /f | Out-Null
 }
 
 New-Item -Path 'HKCU:\Software\RegisteredApplications' -Force | Out-Null
