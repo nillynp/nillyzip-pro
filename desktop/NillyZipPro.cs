@@ -1,5 +1,5 @@
 // ============================================================================
-// NillyZip Pro v1.0 — Ultra-Light Native Archive Manager for Windows 10/11
+// NillyZip Pro v1.2 — Ultra-Light Native Archive Manager for Windows 10/11
 // created by Nilly graphics (Sotiris Christos) — https://nillygraphics.com/
 // Strictly C# 5 compatible (.NET Framework 4.x csc.exe — 0 external DLLs)
 // Native ZIP + Windows 11 libarchive (RAR, 7Z, TAR, GZ, XZ, BZ2, ZST, CAB)
@@ -7,6 +7,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -27,8 +28,8 @@ using System.Windows.Forms;
 [assembly: AssemblyProduct("NillyZip Pro")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 Nilly graphics (Sotiris Christos) — https://nillygraphics.com/")]
 [assembly: AssemblyTrademark("Nilly graphics / Nillygraphics — Sotiris Christos")]
-[assembly: AssemblyVersion("1.1.1.0")]
-[assembly: AssemblyFileVersion("1.1.1.0")]
+[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyFileVersion("1.2.0.0")]
 
 namespace NillyZipPro
 {
@@ -75,6 +76,7 @@ namespace NillyZipPro
     internal sealed class ArchiveEntryItem
     {
         public string FullPath;       // normalized with '/'
+        public string RawPath;        // original path as reported by tar/zip
         public string Name;
         public bool IsDir;
         public long UncompressedSize;
@@ -203,12 +205,14 @@ namespace NillyZipPro
                     string mode = m.Groups[1].Value;
                     long sz = 0;
                     long.TryParse(m.Groups[2].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out sz);
-                    string rawPath = NormalizeRelPath(m.Groups[4].Value);
+                    string origPath = m.Groups[4].Value.Trim();
+                    string rawPath = NormalizeRelPath(origPath);
                     if (string.IsNullOrEmpty(rawPath)) continue;
                     bool isDir = mode.StartsWith("d") || rawPath.EndsWith("/");
                     string clean = rawPath.TrimEnd('/');
                     ArchiveEntryItem it = new ArchiveEntryItem();
                     it.FullPath = clean;
+                    it.RawPath = origPath;
                     int sl = clean.LastIndexOf('/');
                     it.Name = sl >= 0 ? clean.Substring(sl + 1) : clean;
                     it.IsDir = isDir;
@@ -219,12 +223,14 @@ namespace NillyZipPro
                 }
                 else
                 {
-                    string rawPath = NormalizeRelPath(line);
+                    string origPath = line.Trim();
+                    string rawPath = NormalizeRelPath(origPath);
                     if (string.IsNullOrEmpty(rawPath)) continue;
                     bool isDir = rawPath.EndsWith("/");
                     string clean = rawPath.TrimEnd('/');
                     ArchiveEntryItem it = new ArchiveEntryItem();
                     it.FullPath = clean;
+                    it.RawPath = origPath;
                     int sl = clean.LastIndexOf('/');
                     it.Name = sl >= 0 ? clean.Substring(sl + 1) : clean;
                     it.IsDir = isDir;
@@ -315,8 +321,18 @@ namespace NillyZipPro
                 args.Append("-xf \"").Append(archivePath).Append("\" -C \"").Append(destDir).Append("\"");
                 if (onlyRelPaths != null && onlyRelPaths.Count > 0)
                 {
+                    bool hasDotSlash = false;
+                    for (int i = 0; i < all.Count; i++)
+                    {
+                        if (!string.IsNullOrEmpty(all[i].RawPath) && all[i].RawPath.StartsWith("./"))
+                        { hasDotSlash = true; break; }
+                    }
                     for (int i = 0; i < onlyRelPaths.Count; i++)
-                        args.Append(" \"").Append(onlyRelPaths[i]).Append("\"");
+                    {
+                        string pArg = onlyRelPaths[i].TrimEnd('/');
+                        if (hasDotSlash && !pArg.StartsWith("./")) pArg = "./" + pArg;
+                        args.Append(" \"").Append(pArg).Append("\"");
+                    }
                 }
                 if (onProgress != null) onProgress(1, 2, Path.GetFileName(archivePath));
                 string stdout, stderr;
@@ -325,6 +341,167 @@ namespace NillyZipPro
                 if (onProgress != null) onProgress(2, 2, "Ολοκληρώθηκε");
                 return onlyRelPaths != null && onlyRelPaths.Count > 0 ? onlyRelPaths.Count : all.Count;
             }
+        }
+
+        public static string DragTempRoot
+        {
+            get { return Path.Combine(Path.GetTempPath(), "NillyZipDrag"); }
+        }
+
+        public static void CleanupOldDragDirs(int olderThanMinutes)
+        {
+            try
+            {
+                string root = DragTempRoot;
+                if (!Directory.Exists(root)) return;
+                DateTime cutoff = DateTime.UtcNow.AddMinutes(-olderThanMinutes);
+                string[] dirs = Directory.GetDirectories(root);
+                for (int i = 0; i < dirs.Length; i++)
+                {
+                    try
+                    {
+                        if (Directory.GetLastWriteTimeUtc(dirs[i]) < cutoff)
+                            Directory.Delete(dirs[i], true);
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+        }
+
+        private static string UniqueFlatFileName(string stageDir, string fileName)
+        {
+            string safeName = Path.GetFileName(fileName);
+            if (string.IsNullOrEmpty(safeName)) safeName = "file";
+            string candidate = safeName;
+            string stem = Path.GetFileNameWithoutExtension(safeName);
+            string ext = Path.GetExtension(safeName);
+            int idx = 2;
+            while (File.Exists(Path.Combine(stageDir, candidate)) || Directory.Exists(Path.Combine(stageDir, candidate)))
+            {
+                candidate = stem + " (" + idx + ")" + ext;
+                idx++;
+            }
+            return candidate;
+        }
+
+        // Extracts ONLY selected items relative to currentFolder into stageDir for Drag & Drop OUT / Clipboard Copy
+        public static string[] ExtractForDrag(string archivePath, string stageDir, List<string> selectedRelPaths, string currentFolder, bool isSearching)
+        {
+            if (string.IsNullOrEmpty(archivePath) || !File.Exists(archivePath) || selectedRelPaths == null || selectedRelPaths.Count == 0)
+                return new string[0];
+
+            Directory.CreateDirectory(stageDir);
+            string basePrefix = (!isSearching && !string.IsNullOrEmpty(currentFolder))
+                ? (NormalizeRelPath(currentFolder).TrimEnd('/') + "/")
+                : "";
+            List<string> topPaths = new List<string>();
+            HashSet<string> seenTop = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            if (IsNativeZip(archivePath))
+            {
+                using (ZipArchive arch = ZipFile.OpenRead(archivePath))
+                {
+                    for (int i = 0; i < arch.Entries.Count; i++)
+                    {
+                        ZipArchiveEntry e = arch.Entries[i];
+                        string norm = NormalizeRelPath(e.FullName);
+                        if (string.IsNullOrEmpty(norm)) continue;
+                        string clean = norm.TrimEnd('/');
+                        if (!MatchesAnyPrefix(clean, selectedRelPaths)) continue;
+                        if (!IsSafeRelativePath(clean))
+                            throw new InvalidDataException("Απορρίφθηκε μη ασφαλής διαδρομή (Zip-Slip): " + norm);
+
+                        string relOut;
+                        if (isSearching)
+                        {
+                            if (norm.EndsWith("/")) continue;
+                            relOut = UniqueFlatFileName(stageDir, Path.GetFileName(clean));
+                        }
+                        else
+                        {
+                            relOut = (basePrefix.Length > 0 && clean.StartsWith(basePrefix, StringComparison.OrdinalIgnoreCase))
+                                ? clean.Substring(basePrefix.Length)
+                                : clean;
+                            relOut = relOut.TrimStart('/');
+                            if (string.IsNullOrEmpty(relOut)) continue;
+                        }
+
+                        string target = SafeCombine(stageDir, relOut);
+                        if (norm.EndsWith("/"))
+                        {
+                            Directory.CreateDirectory(target);
+                        }
+                        else
+                        {
+                            string parent = Path.GetDirectoryName(target);
+                            if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
+                            e.ExtractToFile(target, true);
+                        }
+
+                        int sl = relOut.IndexOf('/');
+                        string topName = sl > 0 ? relOut.Substring(0, sl) : relOut;
+                        string topFull = SafeCombine(stageDir, topName);
+                        if ((File.Exists(topFull) || Directory.Exists(topFull)) && seenTop.Add(topFull))
+                            topPaths.Add(topFull);
+                    }
+                }
+            }
+            else
+            {
+                string rawDir = Path.Combine(stageDir, "__raw");
+                Directory.CreateDirectory(rawDir);
+                try
+                {
+                    ExtractArchive(archivePath, rawDir, selectedRelPaths, null);
+                    for (int i = 0; i < selectedRelPaths.Count; i++)
+                    {
+                        string sel = NormalizeRelPath(selectedRelPaths[i]).TrimEnd('/');
+                        if (string.IsNullOrEmpty(sel) || !IsSafeRelativePath(sel)) continue;
+                        string src = SafeCombine(rawDir, sel);
+                        if (File.Exists(src))
+                        {
+                            string outRel = isSearching
+                                ? UniqueFlatFileName(stageDir, Path.GetFileName(src))
+                                : ((basePrefix.Length > 0 && sel.StartsWith(basePrefix, StringComparison.OrdinalIgnoreCase))
+                                    ? sel.Substring(basePrefix.Length)
+                                    : Path.GetFileName(src));
+                            outRel = outRel.TrimStart('/');
+                            if (string.IsNullOrEmpty(outRel)) continue;
+                            string dst = SafeCombine(stageDir, outRel);
+                            string parent = Path.GetDirectoryName(dst);
+                            if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
+                            if (File.Exists(dst)) File.Delete(dst);
+                            File.Move(src, dst);
+                            int sl = outRel.IndexOf('/');
+                            string topFull = SafeCombine(stageDir, sl > 0 ? outRel.Substring(0, sl) : outRel);
+                            if (seenTop.Add(topFull)) topPaths.Add(topFull);
+                        }
+                        else if (Directory.Exists(src))
+                        {
+                            string outRel = (basePrefix.Length > 0 && sel.StartsWith(basePrefix, StringComparison.OrdinalIgnoreCase))
+                                ? sel.Substring(basePrefix.Length)
+                                : Path.GetFileName(src);
+                            outRel = outRel.TrimStart('/');
+                            if (string.IsNullOrEmpty(outRel)) continue;
+                            string dst = SafeCombine(stageDir, outRel);
+                            string parent = Path.GetDirectoryName(dst);
+                            if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
+                            if (Directory.Exists(dst)) Directory.Delete(dst, true);
+                            Directory.Move(src, dst);
+                            int sl = outRel.IndexOf('/');
+                            string topFull = SafeCombine(stageDir, sl > 0 ? outRel.Substring(0, sl) : outRel);
+                            if (seenTop.Add(topFull)) topPaths.Add(topFull);
+                        }
+                    }
+                }
+                finally
+                {
+                    try { if (Directory.Exists(rawDir)) Directory.Delete(rawDir, true); } catch { }
+                }
+            }
+
+            return topPaths.ToArray();
         }
 
         private static bool MatchesAnyPrefix(string cleanPath, List<string> targets)
@@ -683,6 +860,8 @@ namespace NillyZipPro
         private List<ArchiveEntryItem> _allEntries = new List<ArchiveEntryItem>();
         private string _currentFolder = ""; // normalized e.g. "docs/images"
         private bool _busy = false;
+        private bool _internalDrag = false;
+        private readonly List<KeyValuePair<string, DateTime>> _dragTempDirs = new List<KeyValuePair<string, DateTime>>();
         private Bitmap _logoBmp;
         private Image _previewImg;
 
@@ -692,6 +871,8 @@ namespace NillyZipPro
         private PictureBox _picPreview;
         private Button _btnOpen, _btnNew, _btnExtract, _btnSmartExt, _btnAdd, _btnDel, _btnTest, _btnTheme, _btnUp, _btnEmptyOpen, _btnEmptyNew;
         private DoubleBufferedListView _list;
+        private ContextMenuStrip _ctxList;
+        private ToolStripMenuItem _miOpen, _miExtSel, _miCopyFiles, _miDelSel;
         private SplitContainer _split;
         private ProgressBar _prog;
 
@@ -725,7 +906,21 @@ namespace NillyZipPro
                 Native.SetCueBanner(_txtSearch, "Αναζήτηση αρχείου… (Ctrl+F)");
                 if (!string.IsNullOrEmpty(initialArchive) && File.Exists(initialArchive))
                     OpenArchiveAsync(initialArchive);
+                ThreadPool.QueueUserWorkItem(delegate { ArchiveEngine.CleanupOldDragDirs(15); });
                 Native.TrimWorkingSet();
+            };
+
+            FormClosed += delegate
+            {
+                // Clean up only completed drag staging folders older than 15s so active Explorer async copies never fail
+                DateTime now = DateTime.UtcNow;
+                for (int i = 0; i < _dragTempDirs.Count; i++)
+                {
+                    if ((now - _dragTempDirs[i].Value).TotalSeconds >= 15.0)
+                    {
+                        try { if (Directory.Exists(_dragTempDirs[i].Key)) Directory.Delete(_dragTempDirs[i].Key, true); } catch { }
+                    }
+                }
             };
         }
 
@@ -792,6 +987,20 @@ namespace NillyZipPro
             if (e.Control && e.KeyCode == Keys.N) { e.SuppressKeyPress = true; CreateNewArchiveInteractive(); return; }
             if (e.Control && e.KeyCode == Keys.E) { e.SuppressKeyPress = true; ExtractInteractive(false); return; }
             if (e.Control && e.KeyCode == Keys.F) { e.SuppressKeyPress = true; _txtSearch.Focus(); _txtSearch.SelectAll(); return; }
+            if (e.Control && e.KeyCode == Keys.A && _list.Focused && _list.Items.Count > 0)
+            {
+                e.SuppressKeyPress = true;
+                _list.BeginUpdate();
+                for (int i = 0; i < _list.Items.Count; i++) _list.Items[i].Selected = true;
+                _list.EndUpdate();
+                return;
+            }
+            if (e.Control && e.KeyCode == Keys.C && _list.Focused && _list.SelectedItems.Count > 0)
+            {
+                e.SuppressKeyPress = true;
+                CopySelectedFilesToClipboard();
+                return;
+            }
             if (e.KeyCode == Keys.Escape && !string.IsNullOrEmpty(_txtSearch.Text)) { e.SuppressKeyPress = true; _txtSearch.Text = ""; return; }
             if (e.KeyCode == Keys.Back && !_txtSearch.Focused && !string.IsNullOrEmpty(_currentFolder)) { NavigateUp(); return; }
             if (e.KeyCode == Keys.Delete && _list.Focused && _list.SelectedItems.Count > 0) { DeleteSelectedFromZip(); return; }
@@ -857,7 +1066,7 @@ namespace NillyZipPro
             _list = new DoubleBufferedListView
             {
                 Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, MultiSelect = true,
-                BorderStyle = BorderStyle.None, Font = FontUi, HideSelection = false, OwnerDraw = true
+                BorderStyle = BorderStyle.None, Font = FontUi, HideSelection = false, OwnerDraw = true, AllowDrop = true
             };
             _list.DrawColumnHeader += delegate(object s, DrawListViewColumnHeaderEventArgs e)
             {
@@ -899,10 +1108,32 @@ namespace NillyZipPro
             _list.DoubleClick += delegate { OnListDoubleClick(); };
             _list.SelectedIndexChanged += delegate { UpdatePreviewAndButtons(); };
             _list.KeyDown += delegate(object s, KeyEventArgs e) { if (e.KeyCode == Keys.Enter) OnListDoubleClick(); };
+            _list.ItemDrag += OnListItemDrag;
+            _list.DragEnter += OnDragEnterHandler;
+            _list.DragDrop += OnDragDropHandler;
+
+            _ctxList = new ContextMenuStrip { ShowImageMargin = false, Font = FontUi };
+            _miOpen = new ToolStripMenuItem("Άνοιγμα", null, delegate { OnListDoubleClick(); });
+            _miExtSel = new ToolStripMenuItem("Εξαγωγή επιλεγμένων...", null, delegate { ExtractInteractive(true); });
+            _miCopyFiles = new ToolStripMenuItem("Αντιγραφή αρχείων (Ctrl+C)", null, delegate { CopySelectedFilesToClipboard(); });
+            _miDelSel = new ToolStripMenuItem("Διαγραφή από το .ZIP", null, delegate { DeleteSelectedFromZip(); });
+            _ctxList.Items.AddRange(new ToolStripItem[] { _miOpen, _miExtSel, _miCopyFiles, new ToolStripSeparator(), _miDelSel });
+            _ctxList.Opening += delegate(object s, System.ComponentModel.CancelEventArgs ce)
+            {
+                bool hasSel = _list.SelectedItems.Count > 0 && !_busy && !string.IsNullOrEmpty(_currentArchive);
+                if (!hasSel) { ce.Cancel = true; return; }
+                _miOpen.Enabled = _list.SelectedItems.Count == 1;
+                _miExtSel.Enabled = true;
+                _miCopyFiles.Enabled = true;
+                _miDelSel.Enabled = ArchiveEngine.IsNativeZip(_currentArchive);
+            };
+            _list.ContextMenuStrip = _ctxList;
             _split.Panel1.Controls.Add(_list);
 
             // Empty Drop Welcome Panel (overlaid cleanly on Panel1 when no archive is open)
-            _emptyPanel = new Panel { Dock = DockStyle.Fill };
+            _emptyPanel = new Panel { Dock = DockStyle.Fill, AllowDrop = true };
+            _emptyPanel.DragEnter += OnDragEnterHandler;
+            _emptyPanel.DragDrop += OnDragDropHandler;
             Panel card = new Panel { Width = 470, Height = 210 };
             _lblEmptyHead = new Label { Left = 0, Top = 12, Width = 470, Height = 32, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Segoe UI", 14f, FontStyle.Bold), Text = "Σύρε αρχεία ή φακέλους εδώ" };
             _lblEmptySub = new Label { Left = 20, Top = 50, Width = 430, Height = 44, TextAlign = ContentAlignment.MiddleCenter, Font = FontUi, Text = "Άνοιγμα .zip, .rar, .7z, .tar, .gz, .xz, .zst, .cab — ή σύρε αρχεία για άμεση συμπίεση χωρίς διαφημίσεις & popups." };
@@ -917,13 +1148,15 @@ namespace NillyZipPro
             _emptyPanel.BringToFront();
 
             // Right Live Preview Pane
-            _previewPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(10) };
+            _previewPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(10), AllowDrop = true };
+            _previewPanel.DragEnter += OnDragEnterHandler;
+            _previewPanel.DragDrop += OnDragDropHandler;
             _lblPrevTitle = new Label { Dock = DockStyle.Top, Height = 26, Font = FontPill, TextAlign = ContentAlignment.MiddleLeft, Text = "Προεπισκόπηση", UseMnemonic = false };
             _txtPreview = new TextBox
             {
                 Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical,
                 WordWrap = true, BorderStyle = BorderStyle.None, Font = FontMono,
-                Text = "Επίλεξε ένα αρχείο κειμένου, κώδικα ή εικόνας μέσα από το .zip για άμεση προεπισκόπηση χωρίς αποσυμπίεση."
+                Text = "Επίλεξε αρχείο για άμεση προεπισκόπηση, ή σύρε αρχεία/φακέλους έξω στον Windows Explorer (ή Ctrl+C → Ctrl+V)."
             };
             _picPreview = new PictureBox { Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.Zoom, Visible = false };
             _previewPanel.Controls.Add(_txtPreview);
@@ -1001,6 +1234,11 @@ namespace NillyZipPro
             _btnSmartExt.BackColor = _dark ? Color.FromArgb(44, 34, 20) : Color.FromArgb(254, 243, 226);
             _btnSmartExt.ForeColor = _dark ? Color.FromArgb(255, 185, 95) : Color.FromArgb(146, 64, 14);
             _btnSmartExt.FlatAppearance.BorderColor = orange;
+            if (_ctxList != null)
+            {
+                _ctxList.BackColor = bgTop;
+                _ctxList.ForeColor = fgMain;
+            }
         }
 
         private void UpdateActionButtons()
@@ -1205,18 +1443,125 @@ namespace NillyZipPro
 
         private void ExtractSingleAndOpenTemp(ArchiveEntryItem item)
         {
-            if (!ArchiveEngine.IsNativeZip(_currentArchive)) return;
+            if (string.IsNullOrEmpty(_currentArchive) || item == null) return;
             try
             {
                 string tmpDir = Path.Combine(Path.GetTempPath(), "NillyZipPreview");
                 Directory.CreateDirectory(tmpDir);
-                string outFile = Path.Combine(tmpDir, Path.GetFileName(item.Name));
-                byte[] data = ArchiveEngine.ReadZipEntryBytes(_currentArchive, item.FullPath, 64 * 1024 * 1024);
-                if (data == null) return;
-                File.WriteAllBytes(outFile, data);
+                string outFile;
+                if (ArchiveEngine.IsNativeZip(_currentArchive))
+                {
+                    outFile = Path.Combine(tmpDir, Path.GetFileName(item.Name));
+                    byte[] data = ArchiveEngine.ReadZipEntryBytes(_currentArchive, item.FullPath, 64 * 1024 * 1024);
+                    if (data == null) return;
+                    File.WriteAllBytes(outFile, data);
+                }
+                else
+                {
+                    string sub = Path.Combine(tmpDir, Guid.NewGuid().ToString("N").Substring(0, 8));
+                    string[] extracted = ArchiveEngine.ExtractForDrag(_currentArchive, sub, new List<string> { item.FullPath }, "", true);
+                    if (extracted.Length == 0) return;
+                    outFile = extracted[0];
+                }
                 Process.Start(new ProcessStartInfo(outFile) { UseShellExecute = true });
             }
             catch (Exception ex) { MessageBox.Show(this, ex.Message, "NillyZip Pro"); }
+        }
+
+        private string[] StageSelectedForExport(out string stageDir)
+        {
+            stageDir = null;
+            if (_busy || string.IsNullOrEmpty(_currentArchive) || !File.Exists(_currentArchive)) return new string[0];
+            List<string> rels = GetSelectedRelPaths();
+            if (rels.Count == 0) return new string[0];
+            bool searching = !string.IsNullOrWhiteSpace(_txtSearch.Text);
+            stageDir = Path.Combine(ArchiveEngine.DragTempRoot, Guid.NewGuid().ToString("N").Substring(0, 12));
+            return ArchiveEngine.ExtractForDrag(_currentArchive, stageDir, rels, _currentFolder, searching);
+        }
+
+        private void OnListItemDrag(object sender, ItemDragEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left || _busy || string.IsNullOrEmpty(_currentArchive)) return;
+            ListViewItem draggedItem = e.Item as ListViewItem;
+            if (draggedItem != null && !draggedItem.Selected)
+                draggedItem.Selected = true;
+            if (_list.SelectedItems.Count == 0) return;
+
+            string prevStatus = _lblStatus.Text;
+            string stageDir = null;
+            try
+            {
+                Cursor = Cursors.WaitCursor;
+                _lblStatus.Text = "Προετοιμασία " + _list.SelectedItems.Count + " στοιχείων για σύρσιμο...";
+                _lblStatus.Refresh(); // Repaint status without pumping mouse-up messages!
+
+                string[] staged = StageSelectedForExport(out stageDir);
+                Cursor = Cursors.Default;
+                if (staged == null || staged.Length == 0)
+                {
+                    _lblStatus.Text = prevStatus;
+                    if (!string.IsNullOrEmpty(stageDir)) try { Directory.Delete(stageDir, true); } catch { }
+                    return;
+                }
+
+                DataObject dataObj = new DataObject(DataFormats.FileDrop, staged);
+                _internalDrag = true;
+                DragDropEffects effect = DragDropEffects.None;
+                try
+                {
+                    effect = _list.DoDragDrop(dataObj, DragDropEffects.Copy);
+                }
+                finally
+                {
+                    _internalDrag = false;
+                }
+
+                if (effect != DragDropEffects.None)
+                {
+                    _dragTempDirs.Add(new KeyValuePair<string, DateTime>(stageDir, DateTime.UtcNow));
+                    _lblStatus.Text = "✓ Εξήχθησαν με σύρσιμο " + staged.Length + " στοιχεία!";
+                }
+                else
+                {
+                    try { if (Directory.Exists(stageDir)) Directory.Delete(stageDir, true); } catch { }
+                    _lblStatus.Text = prevStatus;
+                }
+            }
+            catch (Exception ex)
+            {
+                Cursor = Cursors.Default;
+                _internalDrag = false;
+                if (!string.IsNullOrEmpty(stageDir)) try { if (Directory.Exists(stageDir)) Directory.Delete(stageDir, true); } catch { }
+                _lblStatus.Text = prevStatus;
+                MessageBox.Show(this, "Σφάλμα κατά το σύρσιμο αρχείων:\r\n" + ex.Message, "NillyZip Pro", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        private void CopySelectedFilesToClipboard()
+        {
+            if (_busy || string.IsNullOrEmpty(_currentArchive) || _list.SelectedItems.Count == 0) return;
+            string stageDir = null;
+            try
+            {
+                Cursor = Cursors.WaitCursor;
+                _lblStatus.Text = "Αντιγραφή επιλεγμένων αρχείων στο πρόχειρο...";
+                _lblStatus.Refresh();
+                string[] staged = StageSelectedForExport(out stageDir);
+                Cursor = Cursors.Default;
+                if (staged == null || staged.Length == 0) return;
+
+                StringCollection sc = new StringCollection();
+                sc.AddRange(staged);
+                Clipboard.SetFileDropList(sc);
+                _dragTempDirs.Add(new KeyValuePair<string, DateTime>(stageDir, DateTime.UtcNow));
+                _lblStatus.Text = "✓ Αντιγράφηκαν " + staged.Length + " στοιχεία — πάτησε Ctrl+V σε οποιονδήποτε φάκελο!";
+            }
+            catch (Exception ex)
+            {
+                Cursor = Cursors.Default;
+                if (!string.IsNullOrEmpty(stageDir)) try { if (Directory.Exists(stageDir)) Directory.Delete(stageDir, true); } catch { }
+                MessageBox.Show(this, "Σφάλμα αντιγραφής:\r\n" + ex.Message, "NillyZip Pro", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         private void UpdatePreviewAndButtons()
@@ -1470,11 +1815,13 @@ namespace NillyZipPro
 
         private void OnDragEnterHandler(object sender, DragEventArgs e)
         {
-            if (e.Data.GetDataPresent(DataFormats.FileDrop)) e.Effect = DragDropEffects.Copy;
+            if (_internalDrag) { e.Effect = DragDropEffects.None; return; }
+            if (e.Data != null && e.Data.GetDataPresent(DataFormats.FileDrop)) e.Effect = DragDropEffects.Copy;
         }
 
         private void OnDragDropHandler(object sender, DragEventArgs e)
         {
+            if (_internalDrag || e.Data == null) return;
             string[] files = e.Data.GetData(DataFormats.FileDrop) as string[];
             if (files == null || files.Length == 0) return;
             if (files.Length == 1 && File.Exists(files[0]) && ArchiveEngine.IsSupportedArchive(files[0]))
@@ -1697,8 +2044,36 @@ namespace NillyZipPro
                 sb.AppendLine("EXTRACTED=" + extCnt + " | GREEK_UTF8_MATCH=" + utf8Ok);
                 if (!utf8Ok) throw new InvalidDataException("UTF-8 content mismatch.");
 
-                // 4. Test native Windows 11 tar.exe .7z creation & reading (ASCII paths for universal locale support)
+                // 3b. Test Drag-OUT extraction (nested single file, nested folder, and search-mode flat file)
+                string dragFileStage = Path.Combine(temp, "drag_file");
+                string[] draggedFile = ArchiveEngine.ExtractForDrag(zipPath, dragFileStage,
+                    new List<string> { "Πρότζεκτ_Nilly/Έγγραφα/Προσφορά.txt" }, "Πρότζεκτ_Nilly/Έγγραφα", false);
+                bool dragFileOk = draggedFile.Length == 1 &&
+                    Path.GetFileName(draggedFile[0]) == "Προσφορά.txt" &&
+                    File.ReadAllText(draggedFile[0], Encoding.UTF8) == sampleText;
+
+                string dragDirStage = Path.Combine(temp, "drag_dir");
+                string[] draggedDir = ArchiveEngine.ExtractForDrag(zipPath, dragDirStage,
+                    new List<string> { "Πρότζεκτ_Nilly/Έγγραφα" }, "Πρότζεκτ_Nilly", false);
+                bool dragDirOk = draggedDir.Length == 1 &&
+                    Directory.Exists(draggedDir[0]) &&
+                    Path.GetFileName(draggedDir[0]) == "Έγγραφα" &&
+                    File.ReadAllText(Path.Combine(draggedDir[0], "Προσφορά.txt"), Encoding.UTF8) == sampleText;
+
+                string dragSearchStage = Path.Combine(temp, "drag_search");
+                string[] draggedSearch = ArchiveEngine.ExtractForDrag(zipPath, dragSearchStage,
+                    new List<string> { "Πρότζεκτ_Nilly/Έγγραφα/Προσφορά.txt", "Πρότζεκτ_Nilly/manifest.json" }, "", true);
+                bool dragSearchOk = draggedSearch.Length == 2 &&
+                    File.Exists(Path.Combine(dragSearchStage, "Προσφορά.txt")) &&
+                    File.Exists(Path.Combine(dragSearchStage, "manifest.json"));
+
+                sb.AppendLine("DRAG_OUT_ZIP_FILE=" + dragFileOk + " | DRAG_OUT_ZIP_DIR=" + dragDirOk + " | DRAG_OUT_SEARCH=" + dragSearchOk);
+                if (!dragFileOk || !dragDirOk || !dragSearchOk)
+                    throw new InvalidDataException("Drag-out ZIP extraction test failed.");
+
+                // 4. Test native Windows 11 tar.exe .7z creation, reading & drag-out (ASCII paths for universal locale support)
                 bool sevenZOk = false;
+                bool sevenZDragOk = false;
                 if (ArchiveEngine.TarExePath != null)
                 {
                     string asciiDir = Path.Combine(temp, "Nilly_7z_Project");
@@ -1709,9 +2084,17 @@ namespace NillyZipPro
                     ArchiveEngine.CreateMultiFormatArchive(szPath, new string[] { asciiDir }, CompressionLevel.Optimal, null);
                     List<ArchiveEntryItem> szItems = ArchiveEngine.ListEntries(szPath);
                     sevenZOk = szItems.Count >= 2;
-                    sb.AppendLine("7Z_NATIVE_ENTRIES=" + szItems.Count);
+                    string drag7zStage = Path.Combine(temp, "drag_7z");
+                    string[] dragged7z = ArchiveEngine.ExtractForDrag(szPath, drag7zStage,
+                        new List<string> { "Nilly_7z_Project/readme.txt" }, "Nilly_7z_Project", false);
+                    sevenZDragOk = dragged7z.Length == 1 &&
+                        Path.GetFileName(dragged7z[0]) == "readme.txt" &&
+                        File.ReadAllText(dragged7z[0], Encoding.UTF8) == sampleText;
+                    sb.AppendLine("7Z_NATIVE_ENTRIES=" + szItems.Count + " | DRAG_OUT_7Z=" + sevenZDragOk);
                 }
                 sb.AppendLine("7Z_OK=" + sevenZOk);
+                if (ArchiveEngine.TarExePath != null && (!sevenZOk || !sevenZDragOk))
+                    throw new InvalidDataException("7Z drag-out test failed.");
 
                 // 5. Open GUI, load archive, capture preview PNG & measure RAM
                 using (MainForm f = new MainForm(null))
