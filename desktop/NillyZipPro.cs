@@ -27,8 +27,8 @@ using System.Windows.Forms;
 [assembly: AssemblyProduct("NillyZip Pro")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 Nilly graphics (Sotiris Christos) — https://nillygraphics.com/")]
 [assembly: AssemblyTrademark("Nilly graphics / Nillygraphics — Sotiris Christos")]
-[assembly: AssemblyVersion("1.0.2.0")]
-[assembly: AssemblyFileVersion("1.0.2.0")]
+[assembly: AssemblyVersion("1.1.0.0")]
+[assembly: AssemblyFileVersion("1.1.0.0")]
 
 namespace NillyZipPro
 {
@@ -697,6 +697,7 @@ namespace NillyZipPro
 
         public MainForm(string initialArchive)
         {
+            _dark = Program.ReadSuiteDark(true);
             Text = "NillyZip Pro — Nilly graphics";
             Size = new Size(1060, 660);
             MinimumSize = new Size(760, 460);
@@ -1340,7 +1341,7 @@ namespace NillyZipPro
                         {
                             _lblStatus.Text = "✓ Εξήχθησαν " + count + " στοιχεία -> " + destDir;
                             if (openFolder && Directory.Exists(destDir))
-                                try { Process.Start("explorer.exe", "\"" + destDir + "\""); } catch { }
+                                Program.OpenFolderSmart(destDir);
                         }
                     });
                 }
@@ -1575,6 +1576,47 @@ namespace NillyZipPro
             return 0;
         }
 
+        internal static bool ReadSuiteDark(bool fallback)
+        {
+            try
+            {
+                string p = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"NillySuite\suite.theme");
+                if (File.Exists(p))
+                {
+                    string s = File.ReadAllText(p, Encoding.ASCII).Trim();
+                    if (s.Equals("light", StringComparison.OrdinalIgnoreCase)) return false;
+                    if (s.Equals("dark", StringComparison.OrdinalIgnoreCase)) return true;
+                }
+            }
+            catch { }
+            return fallback;
+        }
+
+        internal static void OpenFolderSmart(string dir)
+        {
+            if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir)) return;
+            try
+            {
+                string filesExe = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"NillySuite\NillyFilesPro\NillyFilesPro.exe");
+                if (!File.Exists(filesExe))
+                {
+                    DirectoryInfo par = Directory.GetParent(AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\'));
+                    if (par != null)
+                    {
+                        string sib = Path.Combine(Path.Combine(par.FullName, "NillyFilesPro"), "NillyFilesPro.exe");
+                        if (File.Exists(sib)) filesExe = sib;
+                    }
+                }
+                if (File.Exists(filesExe))
+                {
+                    Process.Start(new ProcessStartInfo(filesExe, "\"" + dir + "\"") { WorkingDirectory = Path.GetDirectoryName(filesExe), UseShellExecute = true });
+                    return;
+                }
+            }
+            catch { }
+            try { Process.Start("explorer.exe", "\"" + dir + "\""); } catch { }
+        }
+
         private static int RunCliExtract(string archivePath, bool smartHere)
         {
             try
@@ -1586,7 +1628,7 @@ namespace NillyZipPro
                     ? ArchiveEngine.ResolveSmartExtractDir(archivePath, parent, entries)
                     : Path.Combine(parent, ArchiveEngine.StripArchiveExts(Path.GetFileName(archivePath)));
                 ArchiveEngine.ExtractArchive(archivePath, dest, null, null);
-                try { Process.Start("explorer.exe", "\"" + dest + "\""); } catch { }
+                OpenFolderSmart(dest);
                 return 0;
             }
             catch (Exception ex)
