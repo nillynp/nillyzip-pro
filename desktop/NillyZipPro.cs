@@ -1,5 +1,5 @@
 // ============================================================================
-// NillyZip Pro v1.2.2 — Ultra-Light Native Archive Manager for Windows 10/11
+// NillyZip Pro v1.2.3 — Ultra-Light Native Archive Manager for Windows 10/11
 // created by Nilly graphics (Sotiris Christos) — https://nillygraphics.com/
 // Strictly C# 5 compatible (.NET Framework 4.x csc.exe — 0 external DLLs)
 // Native ZIP + Windows 11 libarchive (RAR, 7Z, TAR, GZ, XZ, BZ2, ZST, CAB)
@@ -28,8 +28,8 @@ using System.Windows.Forms;
 [assembly: AssemblyProduct("NillyZip Pro")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 Nilly graphics (Sotiris Christos) — https://nillygraphics.com/")]
 [assembly: AssemblyTrademark("Nilly graphics / Nillygraphics — Sotiris Christos")]
-[assembly: AssemblyVersion("1.2.2.0")]
-[assembly: AssemblyFileVersion("1.2.2.0")]
+[assembly: AssemblyVersion("1.2.3.0")]
+[assembly: AssemblyFileVersion("1.2.3.0")]
 
 namespace NillyZipPro
 {
@@ -1045,13 +1045,13 @@ namespace NillyZipPro
                 WrapContents = false, Padding = new Padding(0, 3, 0, 0)
             };
 
-            _btnTheme = MkBtn("Light", 48, delegate { _dark = !_dark; ApplyTheme(); });
-            _btnTest = MkBtn("✓ Έλεγχος", 88, delegate { TestCurrentArchiveAsync(); });
-            _btnDel = MkBtn("✕ Διαγρ.", 80, delegate { DeleteSelectedFromZip(); });
-            _btnAdd = MkBtn("+ Προσθήκη", 100, delegate { AddFilesToOpenZip(); });
-            _btnSmartExt = MkBtn("⚡ Εξαγωγή Εδώ", 118, delegate { SmartExtractHereAsync(); });
-            _btnExtract = MkBtn("↓ Εξαγωγή...", 98, delegate { ExtractInteractive(false); });
-            _btnNew = MkBtn("+ Συμπίεση", 96, delegate { CreateNewArchiveInteractive(); });
+            _btnTheme = MkBtn("◐", 34, delegate { _dark = !_dark; ApplyTheme(); });
+            _btnTest = MkBtn("Έλεγχος", 80, delegate { TestCurrentArchiveAsync(); });
+            _btnDel = MkBtn("Διαγρ.", 72, delegate { DeleteSelectedFromZip(); });
+            _btnAdd = MkBtn("+ Προσθήκη", 96, delegate { AddFilesToOpenZip(); });
+            _btnSmartExt = MkBtn("Εξαγωγή Εδώ", 108, delegate { SmartExtractHereAsync(); });
+            _btnExtract = MkBtn("Εξαγωγή...", 96, delegate { ExtractInteractive(false); });
+            _btnNew = MkBtn("+ Συμπίεση", 94, delegate { CreateNewArchiveInteractive(); });
             _btnOpen = MkBtn("Άνοιγμα", 78, delegate { BrowseOpenArchive(); });
 
             actions.Controls.AddRange(new Control[] { _btnTheme, _btnTest, _btnDel, _btnAdd, _btnSmartExt, _btnExtract, _btnNew, _btnOpen });
@@ -1218,15 +1218,14 @@ namespace NillyZipPro
         public void ApplyTheme()
         {
             Native.SetDarkTitlebar(Handle, _dark);
-            Color bgMain = _dark ? Color.FromArgb(20, 21, 25) : Color.FromArgb(244, 246, 250);
-            Color bgTop = _dark ? Color.FromArgb(26, 28, 34) : Color.White;
-            Color bgBar = _dark ? Color.FromArgb(23, 25, 30) : Color.FromArgb(238, 241, 246);
-            Color fgMain = _dark ? Color.FromArgb(240, 244, 250) : Color.FromArgb(22, 24, 30);
-            Color fgMuted = _dark ? Color.FromArgb(144, 152, 168) : Color.FromArgb(95, 105, 118);
-            Color btnBg = _dark ? Color.FromArgb(36, 39, 46) : Color.FromArgb(236, 240, 246);
-            Color border = _dark ? Color.FromArgb(52, 56, 66) : Color.FromArgb(210, 216, 226);
-            Color orange = Color.FromArgb(252, 150, 31);
-            Color cyan = Color.FromArgb(102, 217, 239);
+            Color bgMain = _dark ? Color.FromArgb(24, 26, 31) : Color.FromArgb(248, 249, 251);
+            Color bgTop = _dark ? Color.FromArgb(31, 34, 41) : Color.White;
+            Color bgBar = _dark ? Color.FromArgb(28, 30, 36) : Color.FromArgb(238, 241, 246);
+            Color fgMain = _dark ? Color.FromArgb(236, 239, 244) : Color.FromArgb(28, 32, 40);
+            Color fgMuted = _dark ? Color.FromArgb(148, 157, 174) : Color.FromArgb(98, 108, 125);
+            Color btnBg = _dark ? Color.FromArgb(39, 43, 52) : Color.White;
+            Color border = _dark ? Color.FromArgb(52, 57, 68) : Color.FromArgb(210, 216, 226);
+            Color orange = _dark ? Color.FromArgb(252, 150, 31) : Color.FromArgb(224, 118, 12);
 
             BackColor = bgMain;
             _header.BackColor = bgTop;
@@ -1240,7 +1239,7 @@ namespace NillyZipPro
             _txtPreview.BackColor = bgBar;
             _txtPreview.ForeColor = fgMuted;
             _picPreview.BackColor = bgBar;
-            _txtSearch.BackColor = _dark ? Color.FromArgb(20, 22, 26) : Color.White;
+            _txtSearch.BackColor = _dark ? Color.FromArgb(24, 26, 31) : Color.White;
             _txtSearch.ForeColor = fgMain;
 
             _lblTitle.ForeColor = fgMain;
@@ -1248,23 +1247,19 @@ namespace NillyZipPro
             _lblPath.ForeColor = fgMain;
             _lblStatus.ForeColor = fgMuted;
             _lblCredit.ForeColor = orange;
-            _lblPrevTitle.ForeColor = cyan;
+            _lblPrevTitle.ForeColor = orange;
             _lblEmptyHead.ForeColor = fgMain;
             _lblEmptySub.ForeColor = fgMuted;
-            _btnTheme.Text = _dark ? "Light" : "Dark";
+            _btnTheme.Text = "◐";
 
-            Button[] std = new Button[] { _btnOpen, _btnAdd, _btnDel, _btnTest, _btnTheme, _btnUp };
+            Button[] std = new Button[] { _btnOpen, _btnNew, _btnEmptyNew, _btnAdd, _btnDel, _btnTest, _btnTheme, _btnUp };
             for (int i = 0; i < std.Length; i++)
             {
                 std[i].BackColor = btnBg; std[i].ForeColor = fgMain; std[i].FlatAppearance.BorderColor = border;
             }
-            _btnNew.BackColor = cyan; _btnNew.ForeColor = Color.FromArgb(14, 18, 24); _btnNew.FlatAppearance.BorderColor = cyan;
-            _btnEmptyNew.BackColor = cyan; _btnEmptyNew.ForeColor = Color.FromArgb(14, 18, 24); _btnEmptyNew.FlatAppearance.BorderColor = cyan;
-            _btnExtract.BackColor = orange; _btnExtract.ForeColor = Color.FromArgb(14, 18, 24); _btnExtract.FlatAppearance.BorderColor = orange;
-            _btnEmptyOpen.BackColor = orange; _btnEmptyOpen.ForeColor = Color.FromArgb(14, 18, 24); _btnEmptyOpen.FlatAppearance.BorderColor = orange;
-            _btnSmartExt.BackColor = _dark ? Color.FromArgb(44, 34, 20) : Color.FromArgb(254, 243, 226);
-            _btnSmartExt.ForeColor = _dark ? Color.FromArgb(255, 185, 95) : Color.FromArgb(146, 64, 14);
-            _btnSmartExt.FlatAppearance.BorderColor = orange;
+            _btnExtract.BackColor = orange; _btnExtract.ForeColor = Color.FromArgb(20, 22, 26); _btnExtract.FlatAppearance.BorderColor = orange;
+            _btnEmptyOpen.BackColor = orange; _btnEmptyOpen.ForeColor = Color.FromArgb(20, 22, 26); _btnEmptyOpen.FlatAppearance.BorderColor = orange;
+            _btnSmartExt.BackColor = btnBg; _btnSmartExt.ForeColor = orange; _btnSmartExt.FlatAppearance.BorderColor = orange;
             if (_ctxList != null)
             {
                 _ctxList.BackColor = bgTop;
@@ -1409,7 +1404,7 @@ namespace NillyZipPro
                     string folderName = sl > 0 ? rem.Substring(0, sl) : rem;
                     if (shownFolders.Add(folderName))
                     {
-                        ListViewItem lvi = new ListViewItem("📁  " + folderName);
+                        ListViewItem lvi = new ListViewItem("▸  " + folderName);
                         lvi.SubItems.Add("Φάκελος");
                         lvi.SubItems.Add("");
                         lvi.SubItems.Add("");
@@ -1479,7 +1474,7 @@ namespace NillyZipPro
 
         private ListViewItem MakeFileRow(ArchiveEntryItem it, bool showFullPath)
         {
-            ListViewItem lvi = new ListViewItem("📄  " + (showFullPath ? it.FullPath : it.Name));
+            ListViewItem lvi = new ListViewItem("   " + (showFullPath ? it.FullPath : it.Name));
             lvi.SubItems.Add(FormatBytes(it.UncompressedSize));
             lvi.SubItems.Add(it.CompressedSize >= 0 ? FormatBytes(it.CompressedSize) : "—");
             string ratio = (it.UncompressedSize > 0 && it.CompressedSize >= 0)
