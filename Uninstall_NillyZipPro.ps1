@@ -29,7 +29,7 @@ Remove-Item (Join-Path ([Environment]::GetFolderPath('Programs')) 'Nilly graphic
 
 try {
     Add-Type -Namespace NillyZipUnShell -Name Notify -MemberDefinition '[System.Runtime.InteropServices.DllImport("shell32.dll")] public static extern void SHChangeNotify(int wEventId, int uFlags, System.IntPtr dwItem1, System.IntPtr dwItem2);' -ErrorAction SilentlyContinue
-    [NillyZipUnShell.Notify]::SHChangeNotify(0x08000000, 0x1000, [IntPtr]::Zero, [IntPtr]::Zero)
+    [NillyZipUnShell.Notify]::SHChangeNotify(0x08000000, 0x2000, [IntPtr]::Zero, [IntPtr]::Zero)
 } catch {}
 
 if (-not $Silent) { Write-Host '  Το NillyZip Pro απεγκαταστάθηκε καθαρά από τα Windows.' -ForegroundColor Green }

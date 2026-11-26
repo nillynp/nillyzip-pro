@@ -41,7 +41,7 @@
 
 ## Εγκατάσταση στα Windows 10/11 (100% Portable · Χωρίς Admin)
 
-1. Κατέβασε το **`NillyZip-Pro-v1.2.1-Portable.zip`** από τα [GitHub Releases](https://github.com/nillynp/nillyzip-pro/releases) και αποσυμπίεσέ το (π.χ. `C:\Tools\NillyZipPro`).
+1. Κατέβασε το **`NillyZip-Pro-v1.2.2-Portable.zip`** από τα [GitHub Releases](https://github.com/nillynp/nillyzip-pro/releases) και αποσυμπίεσέ το (π.χ. `C:\Tools\NillyZipPro`).
 2. Τρέξε με διπλό κλικ το **`Install_NillyZipPro.bat`** *(δεν απαιτεί δικαιώματα Administrator!)*.
    - Μεταγλωττίζει αυτόματα το 100% native **`NillyZipPro.exe` (~75 KB)**.
    - Προσθέτει το δεξί κλικ στον Windows Explorer, εγγράφει το `NillyZip Pro` στις Προεπιλεγμένες Εφαρμογές για `.zip / .7z / .rar / .tar` και δημιουργεί συντομεύσεις σε Desktop & Start Menu.

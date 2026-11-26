@@ -1,5 +1,5 @@
 // ============================================================================
-// NillyZip Pro v1.2.1 — Ultra-Light Native Archive Manager for Windows 10/11
+// NillyZip Pro v1.2.2 — Ultra-Light Native Archive Manager for Windows 10/11
 // created by Nilly graphics (Sotiris Christos) — https://nillygraphics.com/
 // Strictly C# 5 compatible (.NET Framework 4.x csc.exe — 0 external DLLs)
 // Native ZIP + Windows 11 libarchive (RAR, 7Z, TAR, GZ, XZ, BZ2, ZST, CAB)
@@ -28,8 +28,8 @@ using System.Windows.Forms;
 [assembly: AssemblyProduct("NillyZip Pro")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 Nilly graphics (Sotiris Christos) — https://nillygraphics.com/")]
 [assembly: AssemblyTrademark("Nilly graphics / Nillygraphics — Sotiris Christos")]
-[assembly: AssemblyVersion("1.2.1.0")]
-[assembly: AssemblyFileVersion("1.2.1.0")]
+[assembly: AssemblyVersion("1.2.2.0")]
+[assembly: AssemblyFileVersion("1.2.2.0")]
 
 namespace NillyZipPro
 {
@@ -2065,7 +2065,7 @@ namespace NillyZipPro
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Σφάλμα αποσυμπίεσης:\r\n" + ex.Message, "NillyZip Pro", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Σφάλμα αποσυμπίεσης:\r\n" + ArchiveEngine.FriendlyError(ex), "NillyZip Pro", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return 1;
             }
         }
@@ -2087,7 +2087,7 @@ namespace NillyZipPro
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Σφάλμα συμπίεσης:\r\n" + ex.Message, "NillyZip Pro", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Σφάλμα συμπίεσης:\r\n" + ArchiveEngine.FriendlyError(ex), "NillyZip Pro", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return 1;
             }
         }
